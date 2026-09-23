@@ -21,7 +21,7 @@ SOAP address: `https://localhost:7184/Services/Greeting.svc`. WSDL: `https://loc
 
 ## Call with an access token
 
-Obtain an access token from your configured issuer with `aud` equal to `Jwt__Audience`. The `Greet` SOAP action is `urn:example:greeting:v1/IGreetingService/Greet`.
+Obtain an access token from your configured issuer with `aud` equal to `Jwt__Audience` and the `greeting.read` scope. The `Greet` SOAP action is `urn:example:greeting:v1/IGreetingService/Greet`.
 
 ```bash
 curl -i 'https://localhost:7184/Services/Greeting.svc' \
@@ -46,4 +46,25 @@ Create `request.xml` with:
 
 For generated WCF clients, use `BasicHttpBinding` with transport security and set the outbound HTTP `Authorization` header using `HttpRequestMessageProperty` inside an `OperationContextScope`. Refresh the token before it expires. Configure the client endpoint for HTTPS; do not put a bearer token in the SOAP body or URL.
 
-Replace `GreetingService` and `IGreetingService` with your own contract. Add a policy to `AddAuthorization` and use `[Authorize(Policy = "Name")]` for claim or scope restrictions. Keep issuer credentials outside source control.
+## Scope authorization per operation
+
+`Program.cs` defines the `GreetingRead` policy. It accepts `greeting.read` in a `scope` or `scp` claim, including a space-separated list such as `"scope": "greeting.read profile"`. The implementation method uses `[Authorize(Policy = "GreetingRead")]`; a valid token without this scope is denied. Define another named policy for each distinct permission and apply it to the corresponding service implementation method. For example:
+
+```csharp
+options.AddPolicy("GreetingWrite", new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
+    .RequireAuthenticatedUser()
+    .RequireAssertion(context => context.User.Claims.Any(claim =>
+        (claim.Type is "scope" or "scp") &&
+        claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Contains("greeting.write", StringComparer.Ordinal)))
+    .Build());
+
+[Authorize(Policy = "GreetingWrite")]
+public void UpdateGreeting(string value) { /* your implementation */ }
+```
+
+Keep scope names aligned with your issuer's access tokens. This sample checks a whole scope value, so `greeting.read.all` does not grant `greeting.read`. Keep issuer credentials outside source control.
+
+## Continuous integration
+
+The GitHub Actions workflow in `.github/workflows/build.yml` restores and builds the project on pushes to `main` and pull requests. It does not need an issuer because it only compiles the service.

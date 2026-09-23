@@ -37,6 +37,14 @@ builder.Services.AddAuthorization(options =>
     options.DefaultPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
         .RequireAuthenticatedUser()
         .Build();
+
+    options.AddPolicy("GreetingRead", new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => context.User.Claims.Any(claim =>
+            (claim.Type is "scope" or "scp") &&
+            claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Contains("greeting.read", StringComparer.Ordinal)))
+        .Build());
 });
 
 builder.Services.AddServiceModelServices();

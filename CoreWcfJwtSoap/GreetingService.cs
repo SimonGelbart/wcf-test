@@ -10,7 +10,7 @@ public sealed class GreetingService : IGreetingService
     public GreetingService(IHttpContextAccessor httpContextAccessor) =>
         _httpContextAccessor = httpContextAccessor;
 
-    [Authorize]
+    [Authorize(Policy = "GreetingRead")]
     public string Greet(string name)
     {
         var caller = _httpContextAccessor.HttpContext?.User.FindFirstValue("sub") ?? "authenticated caller";
