@@ -3,6 +3,7 @@ using CoreWCF.Channels;
 using CoreWCF.Configuration;
 using CoreWCF.Description;
 using CoreWcfJwtSoap;
+using System.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -18,12 +19,44 @@ if (!Uri.TryCreate(authority, UriKind.Absolute, out var issuerUri) || issuerUri.
     throw new InvalidOperationException("Set Jwt:Authority to your HTTPS token issuer and Jwt:Audience to this API's audience.");
 }
 
+// Only outbound issuer discovery and signing-key requests use this proxy.
+var proxyUrl = builder.Configuration["Jwt:Proxy:Url"];
+var proxyUsername = builder.Configuration["Jwt:Proxy:Username"];
+var proxyPassword = builder.Configuration["Jwt:Proxy:Password"];
+WebProxy? issuerProxy = null;
+if (!string.IsNullOrWhiteSpace(proxyUrl))
+{
+    if (!Uri.TryCreate(proxyUrl, UriKind.Absolute, out var proxyUri) ||
+        (proxyUri.Scheme != Uri.UriSchemeHttp && proxyUri.Scheme != Uri.UriSchemeHttps) ||
+        !string.IsNullOrEmpty(proxyUri.UserInfo))
+        throw new InvalidOperationException("Jwt:Proxy:Url must be an absolute HTTP(S) URL without credentials.");
+
+    if (string.IsNullOrWhiteSpace(proxyUsername) != string.IsNullOrWhiteSpace(proxyPassword))
+        throw new InvalidOperationException("Set both Jwt:Proxy:Username and Jwt:Proxy:Password, or neither.");
+
+    issuerProxy = new WebProxy(proxyUri);
+    if (!string.IsNullOrWhiteSpace(proxyUsername))
+        issuerProxy.Credentials = new NetworkCredential(proxyUsername, proxyPassword);
+}
+else if (!string.IsNullOrWhiteSpace(proxyUsername) || !string.IsNullOrWhiteSpace(proxyPassword))
+{
+    throw new InvalidOperationException("Set Jwt:Proxy:Url when supplying proxy credentials.");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.Authority = authority;
         options.Audience = audience;
         options.RequireHttpsMetadata = true;
+        if (issuerProxy is not null)
+        {
+            options.BackchannelHttpHandler = new HttpClientHandler
+            {
+                Proxy = issuerProxy,
+                UseProxy = true
+            };
+        }
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,

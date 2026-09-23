@@ -17,6 +17,19 @@ dotnet run --launch-profile CoreWcfJwtSoap
 
 On Windows PowerShell, set the variables with `$env:Jwt__Authority = '...'` and `$env:Jwt__Audience = '...'`.
 
+### Authorization server through a proxy
+
+If the SOAP host reaches the issuer through an outbound HTTP proxy, set its URL before starting the service:
+
+```bash
+export Jwt__Proxy__Url='http://proxy.example.com:8080'
+# Only for a proxy that requires username/password authentication:
+export Jwt__Proxy__Username='proxy-user'
+export Jwt__Proxy__Password='proxy-password'
+```
+
+Use `Jwt__Proxy__Url` alone for an unauthenticated proxy. The credentials must be supplied together through configuration or environment variables; do not embed them in the URL or commit them to `appsettings.json`. The proxy is used by JWT bearer authentication to fetch OpenID Connect metadata and signing keys from `Jwt__Authority`. Token validation still checks the issuer, audience, lifetime, and signature, and the SOAP client still sends `Authorization: Bearer <token>` to this service over HTTPS. Proxy settings do not route incoming SOAP requests or obtain tokens for clients.
+
 The two SOAP 1.1 endpoints use HTTPS:
 
 | Endpoint | Operation | Requirement |
