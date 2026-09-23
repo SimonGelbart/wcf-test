@@ -1,4 +1,5 @@
 using CoreWCF;
+using CoreWCF.Channels;
 using CoreWCF.Configuration;
 using CoreWCF.Description;
 using CoreWcfJwtSoap;
