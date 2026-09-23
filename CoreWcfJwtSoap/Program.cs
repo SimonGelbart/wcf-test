@@ -55,7 +55,7 @@ builder.Services.AddHttpContextAccessor();
 var app = builder.Build();
 app.UseAuthentication();
 
-// CoreWCF uses the ASP.NET Core bearer handler for the two protected endpoints.
+// CoreWCF applies each operation's authorization policy on this protected endpoint.
 app.UseServiceModel(services =>
 {
     services.AddService<GreetingService>();
@@ -70,19 +70,6 @@ app.UseServiceModel(services =>
             }
         }
     }, "/Services/Greeting.svc");
-
-    services.AddService<AuthenticatedGreetingService>();
-    services.AddServiceEndpoint<AuthenticatedGreetingService, IAuthenticatedGreetingService>(new BasicHttpBinding
-    {
-        Security = new BasicHttpSecurity
-        {
-            Mode = BasicHttpSecurityMode.Transport,
-            Transport = new HttpTransportSecurity
-            {
-                ClientCredentialType = HttpClientCredentialType.InheritedFromHost
-            }
-        }
-    }, "/Services/AuthenticatedGreeting.svc");
 
     // This distinct contract has no [Authorize] operation and accepts anonymous callers.
     services.AddService<PublicGreetingService>();

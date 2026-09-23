@@ -7,4 +7,7 @@ public interface IGreetingService
 {
     [OperationContract]
     string Greet(string name);
+
+    [OperationContract]
+    string GreetAuthenticated(string name);
 }
