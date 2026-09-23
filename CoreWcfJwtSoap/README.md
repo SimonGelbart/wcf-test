@@ -17,7 +17,15 @@ dotnet run --launch-profile CoreWcfJwtSoap
 
 On Windows PowerShell, set the variables with `$env:Jwt__Authority = '...'` and `$env:Jwt__Audience = '...'`.
 
-SOAP address: `https://localhost:7184/Services/Greeting.svc`. WSDL: `https://localhost:7184/Services/Greeting.svc?wsdl`. The WSDL may be publicly readable; each SOAP operation requires a valid access token.
+The three SOAP 1.1 endpoints use HTTPS:
+
+| Endpoint | Operation | Requirement |
+| --- | --- | --- |
+| `/Services/Greeting.svc` | `Greet` | Valid JWT with `greeting.read` scope |
+| `/Services/AuthenticatedGreeting.svc` | `GreetAuthenticated` | Valid JWT; no scope required |
+| `/Services/PublicGreeting.svc` | `GreetPublic` | No token required |
+
+Each WSDL is available by appending `?wsdl` to its HTTPS address, for example `https://localhost:7184/Services/PublicGreeting.svc?wsdl`. WSDL metadata may be publicly readable even for protected operations.
 
 ## Call with an access token
 
@@ -44,6 +52,10 @@ Create `request.xml` with:
 </s:Envelope>
 ```
 
+To call the authenticated endpoint with a token that has no `greeting.read` scope, change the URL to `/Services/AuthenticatedGreeting.svc`, the SOAP action to `urn:example:greeting:v1/IAuthenticatedGreetingService/GreetAuthenticated`, and the body element to `<GreetAuthenticated xmlns="urn:example:greeting:v1">`. Keep the `Authorization` header.
+
+To call the public endpoint, change the URL to `/Services/PublicGreeting.svc`, the SOAP action to `urn:example:greeting:v1/IPublicGreetingService/GreetPublic`, and the body element to `<GreetPublic xmlns="urn:example:greeting:v1">`. Omit the `Authorization` header. In both cases, retain the `<name>...</name>` child and the matching closing body element.
+
 For generated WCF clients, use `BasicHttpBinding` with transport security and set the outbound HTTP `Authorization` header using `HttpRequestMessageProperty` inside an `OperationContextScope`. Refresh the token before it expires. Configure the client endpoint for HTTPS; do not put a bearer token in the SOAP body or URL.
 
 ## Scope authorization per operation
@@ -64,6 +76,8 @@ public void UpdateGreeting(string value) { /* your implementation */ }
 ```
 
 Keep scope names aligned with your issuer's access tokens. This sample checks a whole scope value, so `greeting.read.all` does not grant `greeting.read`. Keep issuer credentials outside source control.
+
+`AuthenticatedGreetingService.GreetAuthenticated` uses plain `[Authorize]`, which applies the default policy requiring a valid JWT. `PublicGreetingService` is a separate contract with no authorization attribute and an HTTPS transport binding with `ClientCredentialType.None`. CoreWCF does not support using `[AllowAnonymous]` to expose a method on a protected service.
 
 ## Continuous integration
 
