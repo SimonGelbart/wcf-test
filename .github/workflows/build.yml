@@ -18,5 +18,9 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Restore
         run: dotnet restore CoreWcfJwtSoap/CoreWcfJwtSoap.csproj
+      - name: Restore integration runner
+        run: dotnet restore SoapApi.IntegrationTests/SoapApi.IntegrationTests.csproj
       - name: Build
         run: dotnet build CoreWcfJwtSoap/CoreWcfJwtSoap.csproj --no-restore --configuration Release
+      - name: Build integration runner
+        run: dotnet build SoapApi.IntegrationTests/SoapApi.IntegrationTests.csproj --no-restore --configuration Release
