@@ -11,14 +11,12 @@ public sealed class GreetingService : IGreetingService
         _httpContextAccessor = httpContextAccessor;
 
     [Authorize(Policy = "GreetingRead")]
-    public string Greet(string name)
-    {
-        var caller = _httpContextAccessor.HttpContext?.User.FindFirstValue("sub") ?? "authenticated caller";
-        return $"Hello, {name}! (from {caller})";
-    }
+    public string Greet(string name) => FormatGreeting(name);
 
     [Authorize]
-    public string GreetAuthenticated(string name)
+    public string GreetAuthenticated(string name) => FormatGreeting(name);
+
+    private string FormatGreeting(string name)
     {
         var caller = _httpContextAccessor.HttpContext?.User.FindFirstValue("sub") ?? "authenticated caller";
         return $"Hello, {name}! (from {caller})";
