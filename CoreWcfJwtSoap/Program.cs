@@ -9,6 +9,7 @@ builder.Services.AddGreetingAuthorization();
 builder.Services.AddServiceModelServices();
 builder.Services.AddServiceModelMetadata();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<GreetingMessageStore>();
 
 var app = builder.Build();
 app.UseAuthentication();

@@ -8,7 +8,8 @@ internal static class Program
             var tokenUrl = Required("SOAP_TEST_TOKEN_URL");
             var clientId = Required("SOAP_TEST_CLIENT_ID");
             var clientSecret = Required("SOAP_TEST_CLIENT_SECRET");
-            var scopedScope = Environment.GetEnvironmentVariable("SOAP_TEST_SCOPED_SCOPE") ?? "greeting.read";
+            var readScope = Environment.GetEnvironmentVariable("SOAP_TEST_READ_SCOPE") ?? "greeting.read";
+            var writeScope = Environment.GetEnvironmentVariable("SOAP_TEST_WRITE_SCOPE") ?? "greeting.write";
             var authOnlyScope = Environment.GetEnvironmentVariable("SOAP_TEST_AUTH_ONLY_SCOPE") ?? "";
             var audience = Environment.GetEnvironmentVariable("SOAP_TEST_AUDIENCE");
 
@@ -19,13 +20,17 @@ internal static class Program
             var tokens = new TokenClient(http, tokenUrl, clientId, clientSecret, audience);
             var soap = new SoapClient(http, baseUrl);
 
-            var scopedToken = await tokens.RequestTokenAsync(scopedScope);
-            if (!TokenClient.HasScope(scopedToken, "greeting.read"))
-                throw new InvalidOperationException("The scoped access token is a JWT without greeting.read. Configure the authentication server to issue that scope.");
+            var readToken = await tokens.RequestTokenAsync(readScope);
+            if (!TokenClient.HasScope(readToken, "greeting.read") || TokenClient.HasScope(readToken, "greeting.write"))
+                throw new InvalidOperationException("The read JWT must contain greeting.read but not greeting.write.");
+
+            var writeToken = await tokens.RequestTokenAsync(writeScope);
+            if (!TokenClient.HasScope(writeToken, "greeting.write") || TokenClient.HasScope(writeToken, "greeting.read"))
+                throw new InvalidOperationException("The write JWT must contain greeting.write but not greeting.read.");
 
             var authOnlyToken = await tokens.RequestTokenAsync(authOnlyScope);
-            if (TokenClient.HasScope(authOnlyToken, "greeting.read"))
-                throw new InvalidOperationException("The JWT-only token contains greeting.read. Set SOAP_TEST_AUTH_ONLY_SCOPE to a scope that does not grant it (or configure the server's default scopes).");
+            if (TokenClient.HasScope(authOnlyToken, "greeting.read") || TokenClient.HasScope(authOnlyToken, "greeting.write"))
+                throw new InvalidOperationException("The JWT-only token contains a greeting scope. Set SOAP_TEST_AUTH_ONLY_SCOPE to another scope (or configure the server's default scopes).");
 
             await soap.ExpectGreetingAsync("PublicGreeting.svc", "IPublicGreetingService", "GreetPublic", null);
             Console.WriteLine("PASS public operation without a token");
@@ -33,11 +38,29 @@ internal static class Program
             await soap.ExpectGreetingAsync("Greeting.svc", "IGreetingService", "GreetAuthenticated", authOnlyToken);
             Console.WriteLine("PASS authenticated operation with JWT lacking greeting.read");
 
-            await soap.ExpectGreetingAsync("Greeting.svc", "IGreetingService", "Greet", scopedToken);
+            await soap.ExpectGreetingAsync("Greeting.svc", "IGreetingService", "Greet", readToken);
             Console.WriteLine("PASS scoped operation with greeting.read");
 
             await soap.ExpectDeniedAsync("Greeting.svc", "IGreetingService", "Greet", authOnlyToken);
             Console.WriteLine("PASS scoped operation denies JWT lacking greeting.read");
+
+            await soap.ExpectDeniedAsync("Greeting.svc", "IGreetingService", "Greet", writeToken);
+            Console.WriteLine("PASS read operation denies write-only JWT");
+
+            await soap.ExpectDeniedAsync("Greeting.svc", "IGreetingService", "UpdateGreeting", readToken, "salutation");
+            Console.WriteLine("PASS write operation denies read-only JWT");
+
+            string? previous = null;
+            try
+            {
+                previous = await soap.UpdateGreetingAsync(writeToken, "IntegrationWelcome");
+                await soap.ExpectGreetingAsync("Greeting.svc", "IGreetingService", "Greet", readToken, "IntegrationWelcome");
+                Console.WriteLine("PASS write operation changes the greeting read by a read-scoped JWT");
+            }
+            finally
+            {
+                if (previous is not null) await soap.UpdateGreetingAsync(writeToken, previous);
+            }
 
             await soap.ExpectDeniedAsync("Greeting.svc", "IGreetingService", "GreetAuthenticated", null);
             Console.WriteLine("PASS authenticated operation denies anonymous caller");

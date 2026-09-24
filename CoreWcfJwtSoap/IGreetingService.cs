@@ -10,4 +10,7 @@ public interface IGreetingService
 
     [OperationContract]
     string GreetAuthenticated(string name);
+
+    [OperationContract]
+    string UpdateGreeting(string salutation);
 }

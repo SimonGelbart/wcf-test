@@ -35,6 +35,7 @@ The two SOAP 1.1 endpoints use HTTPS:
 | Endpoint | Operation | Requirement |
 | --- | --- | --- |
 | `/Services/Greeting.svc` | `Greet` | Valid JWT with `greeting.read` scope |
+| `/Services/Greeting.svc` | `UpdateGreeting` | Valid JWT with `greeting.write` scope |
 | `/Services/Greeting.svc` | `GreetAuthenticated` | Valid JWT; no scope required |
 | `/Services/PublicGreeting.svc` | `GreetPublic` | No token required |
 
@@ -67,28 +68,27 @@ Create `request.xml` with:
 
 To call `GreetAuthenticated` with a token that has no `greeting.read` scope, keep the URL `/Services/Greeting.svc`, change the SOAP action to `urn:example:greeting:v1/IGreetingService/GreetAuthenticated`, and change the body element to `<GreetAuthenticated xmlns="urn:example:greeting:v1">`. Keep the `Authorization` header.
 
+To update the salutation, send a JWT with `greeting.write` to the same URL using SOAP action `urn:example:greeting:v1/IGreetingService/UpdateGreeting` and this body:
+
+```xml
+<s:Body xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <UpdateGreeting xmlns="urn:example:greeting:v1">
+    <salutation>Welcome</salutation>
+  </UpdateGreeting>
+</s:Body>
+```
+
+The operation returns the previous salutation. The current salutation is shared in memory by service instances and resets to `Hello` when the process restarts; replace `GreetingMessageStore` with persistent storage for a real application.
+
 To call the public endpoint, change the URL to `/Services/PublicGreeting.svc`, the SOAP action to `urn:example:greeting:v1/IPublicGreetingService/GreetPublic`, and the body element to `<GreetPublic xmlns="urn:example:greeting:v1">`. Omit the `Authorization` header. In both cases, retain the `<name>...</name>` child and the matching closing body element.
 
 For generated WCF clients, use `BasicHttpBinding` with transport security and set the outbound HTTP `Authorization` header using `HttpRequestMessageProperty` inside an `OperationContextScope`. Refresh the token before it expires. Configure the client endpoint for HTTPS; do not put a bearer token in the SOAP body or URL.
 
 ## Scope authorization per operation
 
-`Program.cs` defines the `GreetingRead` policy. It accepts `greeting.read` in a `scope` or `scp` claim, including a space-separated list such as `"scope": "greeting.read profile"`. The implementation method uses `[Authorize(Policy = "GreetingRead")]`; a valid token without this scope is denied. Define another named policy for each distinct permission and apply it to the corresponding service implementation method. For example:
+`AuthenticationSetup.cs` registers `GreetingRead` and `GreetingWrite` through one `ScopePolicy` helper. Each matches its exact scope in a `scope` or `scp` claim, including a space-separated list such as `"scope": "greeting.read greeting.write"`. The service methods use `[Authorize(Policy = GreetingPolicies.Read)]` and `[Authorize(Policy = GreetingPolicies.Write)]`. A read-only token cannot call `UpdateGreeting`, and a write-only token cannot call `Greet`.
 
-```csharp
-options.AddPolicy("GreetingWrite", new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
-    .RequireAuthenticatedUser()
-    .RequireAssertion(context => context.User.Claims.Any(claim =>
-        (claim.Type is "scope" or "scp") &&
-        claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Contains("greeting.write", StringComparer.Ordinal)))
-    .Build());
-
-[Authorize(Policy = "GreetingWrite")]
-public void UpdateGreeting(string value) { /* your implementation */ }
-```
-
-Keep scope names aligned with your issuer's access tokens. This sample checks a whole scope value, so `greeting.read.all` does not grant `greeting.read`. Keep issuer credentials outside source control.
+Keep scope names aligned with your issuer's access tokens. This sample checks a whole scope value, so `greeting.read.all` does not grant `greeting.read`. Add a new named policy using `ScopePolicy` for each distinct permission. Keep issuer credentials outside source control.
 
 `GreetingService.GreetAuthenticated` uses plain `[Authorize]`, which applies the default policy requiring a valid JWT. It shares the contract and endpoint with the scope-protected `Greet` operation. `PublicGreetingService` is a separate contract with no authorization attribute and an HTTPS transport binding with `ClientCredentialType.None`. CoreWCF does not support using `[AllowAnonymous]` to expose a method on a protected service.
 

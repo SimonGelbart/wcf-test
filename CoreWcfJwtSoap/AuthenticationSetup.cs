@@ -52,16 +52,20 @@ internal static class AuthenticationSetup
                 .RequireAuthenticatedUser()
                 .Build();
 
-            options.AddPolicy("GreetingRead", new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
-                .RequireAuthenticatedUser()
-                .RequireAssertion(context => context.User.Claims.Any(claim =>
-                    (claim.Type is "scope" or "scp") &&
-                    claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                        .Contains("greeting.read", StringComparer.Ordinal)))
-                .Build());
+            options.AddPolicy(GreetingPolicies.Read, ScopePolicy(GreetingPolicies.ReadScope));
+            options.AddPolicy(GreetingPolicies.Write, ScopePolicy(GreetingPolicies.WriteScope));
         });
         return services;
     }
+
+    private static AuthorizationPolicy ScopePolicy(string scope) =>
+        new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.Claims.Any(claim =>
+                (claim.Type is "scope" or "scp") &&
+                claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Contains(scope, StringComparer.Ordinal)))
+            .Build();
 
     private static WebProxy? CreateIssuerProxy(IConfiguration configuration)
     {
